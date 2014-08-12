@@ -242,23 +242,26 @@ def put_file(title=None, data=None, sheet_names=None, fname=None, update=False, 
 
 def find_file(service, opts):
     files = service.files()
-    try:
-        res = files.list().execute()
-    except errors.HttpError, error:
-        logger.error('An error occurred: %s', exc_info=error)
-        raise error
+    req = files.list()
+    while True:
+        try:
+            res = req.execute()
+        except errors.HttpError, error:
+            logger.error('An error occurred: %s', exc_info=error)
+            raise error
+        fs = [f for f in res['items'] if f['title'] == opts['title'] ]
+        if len(fs)>0:
+            break
+        req = files.list_next(req,res)
 
-    files = res['items']
-    fs = [f for f in files if f['title'] == opts['title'] ]
     if not fs:
-        title_list = sorted([f['title'] for f in files])
+        title_list = sorted([f['title'] for f in res['items']])
         logger.error('file title: %s not in list:\n%s', opts['title'], pprint.pformat(title_list))
         return None
     if len(fs) > 1:
         dups = '\n'.join([f['alternateLink'] for f in fs])
-        logger.warning('title `%s` matches several files in Google Drive.  Using first item in the following link:\n%s', opts['title'], dups)  
-    file = fs[0]
-    return file
+        logger.warning('title `%s` matches several files in Google Drive.  Using first item in the following link:\n%s', opts['title'], dups)
+    return fs[0]
 
 def get_content(opts):
     cache = shelve.open(opts['cache'])
