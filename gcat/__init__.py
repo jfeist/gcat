@@ -260,7 +260,7 @@ def get_content(opts):
     cache = shelve.open(opts['cache'])
     if opts['usecache'] and opts['title'] in cache:
         logger.info('using cached version of %s', opts['title'])
-        content = cache[opts['title']]
+        content = cache[opts['title'].encode('utf-8')]
     else:
         logger.debug('computing from scratch')
         service = get_service(opts)
@@ -269,7 +269,7 @@ def get_content(opts):
             logger.exception('file `%s` could not be found', opts['title'])
             sys.exit()
         content = download(service, file)
-        cache[opts['title']] = content
+        cache[opts['title'].encode('utf-8')] = content
     return content
 
 
