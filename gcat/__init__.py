@@ -1,4 +1,6 @@
 #!/usr/bin/python
+from __future__ import print_function
+from builtins import input
 
 from oauth2client.client import  OAuth2WebServerFlow, OAuth2Credentials
 from oauth2client.file import Storage
@@ -19,7 +21,7 @@ import collections
 from collections import defaultdict, OrderedDict
 import webbrowser
 import yaml, csv, json, pprint
-import StringIO
+import io
 import shelve
 import pandas as pd
 import datetime
@@ -92,7 +94,7 @@ def get_file(title=None, fmt='dict', **kwargs):
         raise ValueError('`title` not found in options.  exiting')
 
     content = get_content(opts)
-    wb = pd.ExcelFile(StringIO.StringIO(content))
+    wb = pd.ExcelFile(io.BytesIO(content))
 
     if fmt == 'pandas_excel':
         return wb
@@ -100,9 +102,9 @@ def get_file(title=None, fmt='dict', **kwargs):
     try:
         parsed_wb = OrderedDict([(sheet_name, wb.parse(sheet_name, header=opts['header'])) for sheet_name in wb.sheet_names])
     except:
-        print 'error parsing worksheet using pandas.ExcelFile.parse(sheet_name). '\
-              'Consider using the pandas_excel fmt in get_file and parsing the fileA '\
-              'yourself to have more control'
+        print('error parsing worksheet using pandas.ExcelFile.parse(sheet_name). '
+              'Consider using the pandas_excel fmt in get_file and parsing the file '
+              'yourself to have more control')
         logger.exception('error parsing worksheet using pandas.ExcelFile.parse(sheet_name). '
                          'Consider using the pandas_excel fmt in get_file and parsing the file '
                          'yourself to have more control')
@@ -117,13 +119,13 @@ def get_file(title=None, fmt='dict', **kwargs):
     else:
         raise ValueError('unkown format: %s' % fmt)
     if len(fmt_wb) == 1:
-        return fmt_wb.values()[0]
+        return list(fmt_wb.values())[0]
     if 'sheet' in opts:
         try:
             return fmt_wb[opts['sheet']]
         except:
-            print 'sheet name: `%s` not found in workbook.  sheet_names: %s' % (opts['sheet'], fmt_wb.keys())
-            logger.exception('sheet name: %s not found in workbook.  sheet_names: %s', opts['sheet'], fmt_wb.keys())
+            print('sheet name: `%s` not found in workbook.  sheet_names: %s' % (opts['sheet'], list(fmt_wb.keys())))
+            logger.exception('sheet name: %s not found in workbook.  sheet_names: %s', opts['sheet'], list(fmt_wb.keys()))
             raise
     else:
         return fmt_wb
@@ -236,15 +238,15 @@ def put_file(title=None, data=None, sheet_names=None, fname=None, update=False, 
                 media_body=media_body,
                 convert=True).execute()
  
-    except errors.HttpError, error:
+    except errors.HttpError as error:
         logger.exception('An error occured while attempting to insert file: %s', title)
 
 
 def find_file(service, opts):
     files = service.files()
     try:
-        res = files.list(q=u'title = "%s"'%opts['title']).execute()
-    except errors.HttpError, error:
+        res = files.list(q='title = "%s"'%opts['title']).execute()
+    except errors.HttpError as error:
         logger.error('An error occurred: %s', exc_info=error)
         raise error
     fs = res['items']
@@ -257,10 +259,14 @@ def find_file(service, opts):
     return fs[0]
 
 def get_content(opts):
+    key = opts['title']
+    if sys.version_info[0] < 3:
+        key = key.encode('utf-8')
+
     cache = shelve.open(opts['cache'])
-    if opts['usecache'] and opts['title'] in cache:
+    if opts['usecache'] and key in cache:
         logger.info('using cached version of %s', opts['title'])
-        content = cache[opts['title'].encode('utf-8')]
+        content = cache[key]
     else:
         logger.debug('computing from scratch')
         service = get_service(opts)
@@ -269,7 +275,7 @@ def get_content(opts):
             logger.exception('file `%s` could not be found', opts['title'])
             sys.exit()
         content = download(service, file)
-        cache[opts['title'].encode('utf-8')] = content
+        cache[key] = content
     return content
 
 
@@ -295,7 +301,7 @@ def get_credentials(flow, opts):
         # get the credentials the hard way
         auth_url = flow.step1_get_authorize_url()
         webbrowser.open(auth_url)
-        code = raw_input('go to:\n\n\t%s\n\nand enter in the code displayed:' % auth_url)
+        code = input('go to:\n\n\t%s\n\nand enter in the code displayed:' % auth_url)
         credentials = flow.step2_exchange(code)
         storage.put(credentials)
 
@@ -308,7 +314,7 @@ def get_credentials(flow, opts):
 
 
 def download(service, file):
-    logger.debug('file.viewkeys(): %s', pprint.pformat(file.viewkeys()))
+    logger.debug('file.viewkeys(): %s', pprint.pformat(file.keys()))
     #download_url = file.get('downloadUrl') # not present for some reason
     #download_url_pdf = file.get('exportLinks')['application/pdf']
     download_url = file.get('exportLinks')['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
@@ -403,7 +409,7 @@ def parse_args(**kwopts):
 
 def write_to_stdout(content):
     for line in content:
-        print '\t'.join(map(str, line))
+        print('\t'.join(map(str, line)))
 
 
 def main():
@@ -419,7 +425,7 @@ def main():
 
     content = get_file(fmt='list', **parse_args())
     if isinstance(content, dict):
-        content = content.values()[0]
+        content = list(content.values())[0]
     write_to_stdout(content)
 
 
